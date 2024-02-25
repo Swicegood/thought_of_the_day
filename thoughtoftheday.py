@@ -1,10 +1,22 @@
 #!/usr/bin/env python3
 import sys
 import re
-from google.cloud import firestore
+import os
+from dotenv import load_dotenv
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
 
-# Initialize Firestore client
-db = firestore.Client()
+# Load environment variables
+load_dotenv()
+
+# Use the loaded environment variable for Firebase authentication
+cred = credentials.Certificate(os.getenv('GOOGLE_APPLICATION_CREDENTIALS'))
+firebase_admin.initialize_app(cred)
+
+# Get a Firestore client
+db = firestore.client()
+
 
 # Function to parse email and extract data
 def parse_email(email_content):

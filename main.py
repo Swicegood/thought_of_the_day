@@ -1,39 +1,70 @@
-import configparser
-import datetime
-import asyncio
-import thoughtoftheday
-from ftplib import FTP
+#!/usr/bin/env python3
+import sys
+import re
+import os
+import email
+from dotenv import load_dotenv
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
 
-def upload_files_to_server(files, remote_path):
-    # Read configuration file for credentials
-    config = configparser.ConfigParser()
-    config.read('config.ini')
-    hostname = config['FTP']['hostname']
-    username = config['FTP']['username']
-    password = config['FTP']['password']
+# Load environment variables
+load_dotenv()
 
-    # Connect to the server using FTP
-    ftp = FTP(hostname)
-    ftp.login(user=username, passwd=password)
+# Use the loaded environment variable for Firebase authentication
+cred = credentials.Certificate(os.getenv('GOOGLE_APPLICATION_CREDENTIALS'))
+firebase_admin.initialize_app(cred)
 
-    # Write the file list to a file
-    with open('all_files.txt', 'w') as f:
-        f.write('#' + str(datetime.datetime.now()) + '\n') 
-        for file in files:
-            f.write(file + '\n')
+# Get a Firestore client
+db = firestore.client()
 
-    # Upload the file to the remote server
-    with open('all_files.txt', 'rb') as f:
-        ftp.storbinary('STOR ' + remote_path, f)
 
-    # Close the FTP connection
-    ftp.quit()
+# Function to parse email and extract data
+def parse_email(email_content):
+    # Simple parsing for demonstration; extract subject
+    subject_match = re.search(r"^Subject: (.+)$", email_content, re.MULTILINE)
+    if subject_match:
+        subject = subject_match.group(1)
+        datestr = subject.split(" ")[-1]
+    else:
+        datestr= "Unknown Date"
 
-async def main():
-    all_files = await audio_scraper.get_all_files()
-    print("Total files found:", len(all_files))
-    upload_files_to_server(all_files, "/wp/wp-content/uploads/all_totd.txt")
+    return datestr
 
+# Parse the email to extract body
+def parse_email_for_body(email_content):
+    msg = email.message_from_string(email_content)
+    if msg.is_multipart():
+        for part in msg.walk():
+            if part.get_content_type() == 'text/plain':
+                return part.get_payload()
+    else:
+        return msg.get_payload()
+
+
+# Function to insert data into Firestore
+def insert_into_firestore(datestr, body):
+    # Reference to your collection
+    collection_ref = db.collection(u'thought-of-the-days')
+    # Data to insert
+    doc_data = {
+        u'date': datestr,
+        u'totd': body,
+        u'processed': firestore.SERVER_TIMESTAMP
+    }
+    # Add a new doc in collection
+    collection_ref.add(doc_data)
+
+# Main script logic
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Read email content from stdin
+    email_content = sys.stdin.read()
     
+    # Parse the email to extract information
+    datestr = parse_email(email_content)
+    body = parse_email_for_body(email_content)
+
+    # Insert extracted information into Firestore
+    insert_into_firestore(datestr, body)
+
+    print("Email processed and data inserted into Firestore.")

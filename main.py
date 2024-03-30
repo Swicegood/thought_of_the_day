@@ -65,11 +65,11 @@ if __name__ == "__main__":
     datestr = parse_email(email_content)
     body = parse_email_for_body(email_content)
     try:
-        body = base64.b64decode(body).decode('utf-8')
+        text = base64.b64decode(body).decode('utf-8')
     except:
-        body = body
+        text = body
     # Insert extracted information into Firestore
-    insert_into_firestore(datestr, body)
+    insert_into_firestore(datestr, text)
 
 
     print("Email processed and data inserted into Firestore.")
